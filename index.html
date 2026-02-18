@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metal Facade Estimator Pro</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --glass: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at top left, #e2e8f0, #f8fafc);
+            overflow-x: hidden;
+            color: #1e293b;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Product Card Selection */
+        .product-option {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .product-option::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .product-option:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        }
+
+        .product-option.active {
+            border-color: #2563eb;
+            background: white;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+        
+        .product-option.active::before {
+            opacity: 1;
+        }
+
+        .product-option.active i {
+            color: #2563eb;
+            transform: scale(1.1);
+        }
+
+        /* 3D Canvas Container */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            /* subtle gradient overlay */
+            background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+        }
+
+        .input-group:focus-within label {
+            color: #2563eb;
+        }
+        
+        .input-group input:focus {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+            border-color: #2563eb;
+        }
+
+        /* Animation for numbers */
+        @keyframes countUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-value {
+            animation: countUp 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col md:flex-row overflow-hidden">
+
+    <!-- 3D Background/Preview -->
+    <div id="canvas-container"></div>
+
+    <!-- Main Content Wrapper -->
+    <div class="relative z-10 w-full h-full flex flex-col md:flex-row p-4 gap-4 pointer-events-none">
+        
+        <!-- Left Panel: Controls (Scrollable) -->
+        <div class="w-full md:w-5/12 lg:w-4/12 h-full pointer-events-auto flex flex-col gap-4">
+            
+            <!-- Header -->
+            <div class="glass-panel rounded-2xl p-6 flex flex-col justify-between shrink-0">
+                <div>
+                    <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
+                        <i class="fa-solid fa-cube mr-2 text-blue-600"></i>Facade Est.
+                    </h1>
+                    <p class="text-slate-500 text-sm mt-1">AI-Powered Costing Engine</p>
+                </div>
+            </div>
+
+            <!-- Scrollable Form Area -->
+            <div class="glass-panel rounded-2xl p-6 flex-1 overflow-y-auto custom-scrollbar">
+                
+                <!-- Product Grid -->
+                <div class="mb-8">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 block">Select Configuration</label>
+                    <div class="grid grid-cols-2 gap-3" id="productGrid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Dimensions -->
+                <div class="mb-6">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 block">Dimensions</label>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="input-group">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Length (ft)</label>
+                            <input type="number" id="lengthInput" class="w-full bg-white/50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-none transition-all" placeholder="0">
+                        </div>
+                        <div class="input-group">
+                            <label class="block text-xs font-medium text-slate-500 mb-1">Breadth (ft)</label>
+                            <input type="number" id="breadthInput" class="w-full bg-white/50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-none transition-all" placeholder="0">
+                        </div>
+                    </div>
+
+                    <div class="relative flex items-center py-2 mb-4">
+                        <div class="flex-grow border-t border-slate-300/50"></div>
+                        <span class="flex-shrink-0 mx-2 text-slate-400 text-[10px] uppercase font-bold">Quick Entry</span>
+                        <div class="flex-grow border-t border-slate-300/50"></div>
+                    </div>
+
+                    <div class="input-group">
+                        <label class="block text-xs font-medium text-slate-500 mb-1">Total Area (sq ft)</label>
+                        <div class="relative">
+                            <input type="number" id="areaInput" class="w-full bg-white/50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700 outline-none transition-all pl-10" placeholder="0">
+                            <i class="fa-solid fa-vector-square absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Visualization & Costs -->
+        <div class="w-full md:w-7/12 lg:w-8/12 h-full flex flex-col gap-4 pointer-events-none">
+            
+            <!-- Top Right: 3D Label Overlay -->
+            <div class="flex justify-end pointer-events-none">
+                <div class="glass-panel px-4 py-2 rounded-full flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-xs font-bold text-slate-600" id="previewLabel">Interactive 3D Preview</span>
+                </div>
+            </div>
+
+            <!-- Spacer for 3D View -->
+            <div class="flex-1 pointer-events-auto" id="scene-interaction-zone">
+                <!-- User interacts with 3D canvas here -->
+            </div>
+
+            <!-- Bottom: Cost Dashboard -->
+            <div class="glass-dark rounded-2xl p-6 pointer-events-auto">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    
+                    <!-- Main Stats -->
+                    <div class="col-span-1 md:col-span-1 space-y-4 border-r border-white/10 pr-6">
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase tracking-wider">Sheets Required</p>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-4xl font-bold text-blue-400" id="summarySheets">0</span>
+                                <span class="text-xs text-slate-500">units</span>
+                            </div>
+                            <p class="text-[10px] text-slate-500 mt-1">8ft x 4ft (2mm thk)</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase tracking-wider">Billable Area</p>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-xl font-semibold text-white" id="summaryBillable">0</span>
+                                <span class="text-xs text-slate-500">sq ft</span>
+                            </div>
+                            <p class="text-[10px] text-orange-400 mt-1">+10% Wastage included</p>
+                        </div>
+                    </div>
+
+                    <!-- Cost Breakdown -->
+                    <div class="col-span-1 md:col-span-2 grid grid-cols-2 gap-4 text-sm">
+                        <div class="space-y-1">
+                            <p class="text-slate-500 text-xs">Material Cost</p>
+                            <p class="text-white font-medium">₹<span id="costSheet">0</span></p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-slate-500 text-xs">Cutting & Bending</p>
+                            <p class="text-white font-medium">₹<span id="costCutting">0</span></p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-slate-500 text-xs">PVDF Coating</p>
+                            <p class="text-white font-medium">₹<span id="costCoating">0</span></p>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-slate-500 text-xs">Installation</p>
+                            <p class="text-white font-medium">₹<span id="costInstall">0</span></p>
+                        </div>
+                        <div class="space-y-1 col-span-2 border-t border-white/10 pt-2 mt-1">
+                            <div class="flex justify-between">
+                                <p class="text-slate-400">Profit Margin</p>
+                                <p class="text-emerald-400">₹<span id="costProfit">0</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grand Total -->
+                    <div class="col-span-1 flex flex-col justify-center items-end pl-6 border-l border-white/10">
+                        <p class="text-slate-400 text-xs uppercase tracking-wider mb-1">Total Estimate</p>
+                        <span class="text-3xl font-bold text-white tracking-tight">₹<span id="grandTotal">0</span></span>
+                        <div class="mt-2 px-2 py-1 bg-white/10 rounded text-[10px] text-slate-300">
+                            @ ₹<span id="perSqFtRate">0</span> / sq ft
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    /**
+     * THREE.JS SETUP
+     */
+    let scene, camera, renderer, facadeMesh;
+    const canvasContainer = document.getElementById('canvas-container');
+
+    function initThree() {
+        scene = new THREE.Scene();
+        // Fog to blend floor into background
+        scene.fog = new THREE.FogExp2(0xe2e8f0, 0.02);
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 4, 8);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        canvasContainer.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        const spotLight = new THREE.SpotLight(0x2563eb, 0.5);
+        spotLight.position.set(-5, 5, 0);
+        spotLight.lookAt(0,0,0);
+        scene.add(spotLight);
+
+        // Ground Plane (Shadow Catcher)
+        const planeGeometry = new THREE.PlaneGeometry(100, 100);
+        const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.1 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -2;
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // Initial Facade
+        updateFacadeGeometry(0);
+
+        // Animation Loop
+        animate();
+    }
+
+    function createMetallicMaterial() {
+        return new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            metalness: 0.9,
+            roughness: 0.2,
+            side: THREE.DoubleSide
+        });
+    }
+
+    function updateFacadeGeometry(index) {
+        if (facadeMesh) scene.remove(facadeMesh);
+
+        const material = createMetallicMaterial();
+        let geometry;
+
+        // Procedural Geometry Generation based on Index
+        switch (index) {
+            case 0: // Coin Matrix
+                geometry = new THREE.InstancedBufferGeometry();
+                const coinGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 32);
+                coinGeo.rotateX(Math.PI/2);
+                const count = 100;
+                const mesh = new THREE.InstancedMesh(coinGeo, material, count);
+                let i = 0;
+                const dummy = new THREE.Object3D();
+                for(let x=0; x<10; x++) {
+                    for(let y=0; y<10; y++) {
+                        dummy.position.set(x*0.6 - 3, y*0.6 - 3, 0);
+                        dummy.updateMatrix();
+                        mesh.setMatrixAt(i++, dummy.matrix);
+                    }
+                }
+                facadeMesh = mesh;
+                break;
+            
+            case 1: // Perforation
+                const shape = new THREE.Shape();
+                shape.moveTo(-3, -3);
+                shape.lineTo(3, -3);
+                shape.lineTo(3, 3);
+                shape.lineTo(-3, 3);
+                
+                // Add holes
+                for(let x=-2.5; x<=2.5; x+=0.5) {
+                    for(let y=-2.5; y<=2.5; y+=0.5) {
+                        const hole = new THREE.Path();
+                        hole.absarc(x, y, 0.15, 0, Math.PI*2, true);
+                        shape.holes.push(hole);
+                    }
+                }
+                geometry = new THREE.ExtrudeGeometry(shape, { depth: 0.1, bevelEnabled: false });
+                facadeMesh = new THREE.Mesh(geometry, material);
+                break;
+
+            case 3: // Parametric Fins
+                const finGeo = new THREE.BoxGeometry(0.1, 6, 0.5);
+                const finCount = 15;
+                const finMesh = new THREE.InstancedMesh(finGeo, material, finCount);
+                const finDummy = new THREE.Object3D();
+                for(let k=0; k<finCount; k++) {
+                    finDummy.position.set(k*0.5 - 3.5, 0, Math.sin(k * 0.5));
+                    finDummy.rotation.y = k * 0.1;
+                    finDummy.updateMatrix();
+                    finMesh.setMatrixAt(k, finDummy.matrix);
+                }
+                facadeMesh = finMesh;
+                break;
+
+            case 6: // Tri Blossom
+                geometry = new THREE.ConeGeometry(0.4, 1, 3);
+                const triMesh = new THREE.InstancedMesh(geometry, material, 50);
+                const triDummy = new THREE.Object3D();
+                for(let x=0; x<5; x++) {
+                    for(let y=0; y<10; y++) {
+                        triDummy.position.set(x*1.2 - 2.5, y*0.6 - 3, 0);
+                        triDummy.rotation.x = Math.PI/2;
+                        triDummy.rotation.z = (x+y) * 0.5;
+                        triDummy.updateMatrix();
+                        triMesh.setMatrixAt(x*10+y, triDummy.matrix);
+                    }
+                }
+                facadeMesh = triMesh;
+                break;
+
+            default: // Solid / Basic / Others
+                geometry = new THREE.BoxGeometry(6, 6, 0.1);
+                // Add some segmentation for visual interest
+                const edges = new THREE.EdgesGeometry(geometry);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff }));
+                facadeMesh = new THREE.Mesh(geometry, material);
+                facadeMesh.add(line);
+                break;
+        }
+
+        facadeMesh.castShadow = true;
+        facadeMesh.receiveShadow = true;
+        scene.add(facadeMesh);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // Gentle rotation for showcase effect
+        if(facadeMesh) {
+            facadeMesh.rotation.y += 0.002;
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Simple Mouse Interaction for Camera
+    let mouseX = 0, mouseY = 0;
+    document.getElementById('scene-interaction-zone').addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
+        mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
+        camera.position.x += (mouseX * 10 - camera.position.x) * 0.05;
+        camera.position.y += (-mouseY * 10 - camera.position.y) * 0.05;
+        camera.lookAt(0, 0, 0);
+    });
+
+
+    /**
+     * CALCULATION LOGIC
+     */
+    const products = [
+        {name: "Coin Matrix", icon: "fa-coins"},
+        {name: "Perforation", icon: "fa-border-none"},
+        {name: "Solid Panels", icon: "fa-square"},
+        {name: "Parametric Fins", icon: "fa-bars"},
+        {name: "Shingles", icon: "fa-layer-group"},
+        {name: "Triangular 3D", icon: "fa-shapes"},
+        {name: "Tri Blossom", icon: "fa-fan"},
+        {name: "Sequin", icon: "fa-circle-dot"},
+        {name: "Kinetic", icon: "fa-wind"},
+        {name: "Custom 3D", icon: "fa-cube"}
+    ];
+
+    const RATES = {
+        sheet: 210, cutting: 60, coating: 60, installation: 120, profit: 200
+    };
+    const SHEET_AREA = 32;
+
+    let selectedProductIndex = 0;
+
+    // Build Product Grid
+    const productGrid = document.getElementById('productGrid');
+    products.forEach((prod, idx) => {
+        const btn = document.createElement('div');
+        btn.className = `product-option cursor-pointer p-4 rounded-xl border border-slate-200 bg-white flex flex-col items-center justify-center gap-2 ${idx === 0 ? 'active' : ''}`;
+        btn.innerHTML = `
+            <i class="fa-solid ${prod.icon} text-2xl text-slate-300 transition-all duration-300"></i>
+            <span class="text-xs font-semibold text-slate-600 text-center">${prod.name}</span>
+        `;
+        btn.onclick = () => {
+            document.querySelectorAll('.product-option').forEach(el => el.classList.remove('active'));
+            btn.classList.add('active');
+            selectedProductIndex = idx;
+            updateFacadeGeometry(idx); // Update 3D Model
+        };
+        productGrid.appendChild(btn);
+    });
+
+    const inputs = ['lengthInput', 'breadthInput', 'areaInput'];
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', (e) => {
+            if (id === 'areaInput' && document.activeElement === e.target) {
+                document.getElementById('lengthInput').value = '';
+                document.getElementById('breadthInput').value = '';
+            } else if (document.activeElement !== document.getElementById('areaInput')) {
+                const l = parseFloat(document.getElementById('lengthInput').value) || 0;
+                const b = parseFloat(document.getElementById('breadthInput').value) || 0;
+                if(l && b) document.getElementById('areaInput').value = (l*b).toFixed(2);
+            }
+            calculate();
+        });
+    });
+
+    function calculate() {
+        const netArea = parseFloat(document.getElementById('areaInput').value) || 0;
+        
+        if (netArea <= 0) {
+            updateNumbers(0,0,0,0,0,0,0,0);
+            return;
+        }
+
+        const wastage = netArea * 0.10;
+        const totalAreaNeeded = netArea + wastage;
+        const sheets = Math.ceil(totalAreaNeeded / SHEET_AREA);
+        const billableArea = sheets * SHEET_AREA;
+
+        const cSheet = billableArea * RATES.sheet;
+        const cCut = billableArea * RATES.cutting;
+        const cCoat = billableArea * RATES.coating;
+        const cInst = billableArea * RATES.installation;
+        const cProf = billableArea * RATES.profit;
+        const total = cSheet + cCut + cCoat + cInst + cProf;
+        const ratePerSqFt = total / netArea;
+
+        updateNumbers(sheets, billableArea, cSheet, cCut, cCoat, cInst, cProf, total, ratePerSqFt);
+    }
+
+    function updateNumbers(sheets, billable, c1, c2, c3, c4, c5, total, rate) {
+        animateValue('summarySheets', sheets);
+        animateValue('summaryBillable', billable.toFixed(1));
+        animateValue('costSheet', formatMoney(c1));
+        animateValue('costCutting', formatMoney(c2));
+        animateValue('costCoating', formatMoney(c3));
+        animateValue('costInstall', formatMoney(c4));
+        animateValue('costProfit', formatMoney(c5));
+        animateValue('grandTotal', formatMoney(total));
+        animateValue('perSqFtRate', formatMoney(rate));
+    }
+
+    function animateValue(id, value) {
+        const el = document.getElementById(id);
+        // Simple swap for now, can be tweened if needed
+        el.textContent = value;
+    }
+
+    function formatMoney(n) {
+        return Math.round(n).toLocaleString('en-IN');
+    }
+
+    // Initialize 3D Scene
+    initThree();
+
+</script>
+</body>
+</html>
+
